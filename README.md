@@ -6,3 +6,7 @@
 # Type Hallo en je Naam
 
 Hallo Nephill
+Hallo Andrea
+Hallo Mohammed
+Hallo Danitza
+Hallo Jermain
