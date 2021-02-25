@@ -1,0 +1,14 @@
+[
+    {
+        "CompanyName": "TeamGeel",
+        "numberOfEmployees": 200,
+        "CEO": "Nephill",
+        "Rating": 3.6
+    },
+    {
+        "CompanyName": "TeamZwart",
+        "numberOfEmployees": 50,
+        "CEO": null,
+        "Rating": 4.3
+    }
+]
