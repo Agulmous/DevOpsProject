@@ -1,0 +1,367 @@
+AWSTemplateFormatVersion: 2010-09-09
+Parameters:
+  apiGatewayHTTPMethod:
+    Type: String
+    Default: POST
+  lambdaFunctionName:
+    Type: String
+    AllowedPattern: '[a-zA-Z0-9]+[a-zA-Z0-9-]+[a-zA-Z0-9]+'
+    Default: arahaltamazirt
+  apiGatewayStageName:
+    Type: String
+    AllowedPattern: '[a-z0-9]+'
+    Default: teststage
+    Description: Create deployment stage    
+
+
+Resources:
+  apiGateway:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Description: Team Yellow API
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+      Name: MohammedAPI
+
+
+  apiGatewayRootMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: !Ref apiGatewayHTTPMethod
+      Integration:
+        IntegrationHttpMethod: POST
+        Credentials: !GetAtt 
+          - lambdaIAMRole
+          - Arn        
+        Type: AWS_PROXY
+        Uri: !Sub
+          - arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${lambdaArn}/invocations
+          - lambdaArn: !GetAtt LambdaDownloadURL.Arn
+      ResourceId: !GetAtt apiGateway.RootResourceId
+      RestApiId: !Ref apiGateway        
+
+
+  apiGatewayDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - apiGatewayRootMethod
+      - Apiuploadmethod
+      - Apidownloadmethod
+      - Apilistmethod
+    Properties:
+      RestApiId: !Ref apiGateway
+      StageName: !Ref apiGatewayStageName
+
+
+  Apilist:
+    Type: 'AWS::ApiGateway::Resource'
+    Properties:
+      PathPart: list
+      RestApiId: !Ref apiGateway
+      ParentId: !GetAtt 
+        - apiGateway
+        - RootResourceId
+
+  Apidownload:
+    Type: 'AWS::ApiGateway::Resource'
+    Properties:
+      PathPart: download
+      RestApiId: !Ref apiGateway
+      ParentId: !GetAtt 
+        - apiGateway
+        - RootResourceId
+
+
+  Apiupload:
+    Type: 'AWS::ApiGateway::Resource'
+    Properties:
+      PathPart: upload
+      RestApiId: !Ref apiGateway
+      ParentId: !GetAtt 
+        - apiGateway
+        - RootResourceId
+
+            
+  
+  Apidownloadmethod:
+    Type: 'AWS::ApiGateway::Method'
+    Properties:
+      HttpMethod: GET
+      RestApiId: !Ref apiGateway
+      ResourceId: !Ref Apidownload
+      AuthorizationType: NONE
+      MethodResponses:
+        - StatusCode: 200
+          ResponseModels:
+            application/json: Empty
+      RequestModels:
+        application/json: !Ref Apimodel
+      Integration:
+        Type: AWS_PROXY
+        
+        Credentials: !GetAtt 
+          - lambdaIAMRole
+          - Arn
+        Uri: !Sub 
+          - >-
+            arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${lambdaArn}/invocations
+          - lambdaArn: !GetAtt 
+              - LambdaDownloadURL
+              - Arn
+        IntegrationHttpMethod: POST
+        IntegrationResponses:
+          - StatusCode: 200
+
+
+
+  Apiuploadmethod:
+    Type: 'AWS::ApiGateway::Method'
+    Properties:
+      HttpMethod: PUT
+      RestApiId: !Ref apiGateway
+      ResourceId: !Ref Apiupload
+      AuthorizationType: NONE
+      MethodResponses:
+        - StatusCode: 200
+          ResponseModels:
+            application/json: !Ref Apimodel
+      RequestModels:
+        application/json: !Ref Apimodel
+      Integration:
+        Type: AWS
+        Credentials: !GetAtt 
+          - lambdaIAMRole
+          - Arn
+        Uri: !Sub 
+          - >-
+            arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${lambdaArn}/invocations
+          - lambdaArn: !GetAtt 
+              - LambdaUploadURL
+              - Arn
+        IntegrationHttpMethod: POST
+        IntegrationResponses:
+          - StatusCode: 200
+
+
+  Apilistmethod:
+    Type: 'AWS::ApiGateway::Method'
+    Properties:
+      HttpMethod: GET
+      RestApiId: !Ref apiGateway
+      ResourceId: !Ref Apilist
+      AuthorizationType: NONE
+      MethodResponses:
+        - StatusCode: 200
+          ResponseModels:
+            application/json: !Ref Apimodel
+      RequestModels:
+        application/json: !Ref Apimodel
+      Integration:
+        Type: AWS
+        Credentials: !GetAtt 
+          - lambdaIAMRole
+          - Arn
+        Uri: !Sub 
+          - >-
+            arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${lambdaArn}/invocations
+          - lambdaArn: !GetAtt 
+              - LambdaListURL
+              - Arn
+        IntegrationHttpMethod: POST
+        IntegrationResponses:
+          - StatusCode: 200
+
+
+  
+  Apimodel:
+    Type: 'AWS::ApiGateway::Model'
+    Properties:
+      Name: gatewaymodel
+      ContentType: application/json
+      RestApiId: !Ref apiGateway
+      Schema: {}
+
+
+  LambdaListURL:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      FunctionName: List-Method
+      Code:
+        ZipFile: |
+          import boto3
+          import json
+          from boto3 import client
+
+          bucket = client('s3')
+
+          def handler(event, context):
+              output = []
+              for key in bucket.list_objects(Bucket='arahaltamazirt')['Contents']:
+                  output.append(key['Key'])
+              return {
+                  'body': {"Available cats": output}
+              }  
+      Description: Mohammed
+      Handler: index.handler
+      Runtime: python3.8
+      MemorySize: 128
+      Timeout: 120
+      Role: !GetAtt 
+        - lambdaIAMRole
+        - Arn
+
+
+
+  LambdaUploadURL:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      FunctionName: Put-Method
+      Code:   
+        ZipFile: !Sub |
+          import boto3
+          import json
+          from random import randint
+          def handler(event, context):
+              bucket = "arahaltamazirt"
+              upload_key = 'cat'+ str(randint(0, 1000000))+'.jpg'
+              s3 = boto3.client('s3')
+              url = s3.generate_presigned_url(
+                  ClientMethod='put_object',
+                  Params={'Bucket': bucket, 'Key': upload_key},
+                  ExpiresIn=600
+              )
+
+              # return the result
+              return {
+                  "upload_url": url
+              }              
+      Description: Mohammed
+      Handler: index.handler
+      Runtime: python3.8
+      MemorySize: 128
+      Timeout: 120
+      Role: !GetAtt 
+        - lambdaIAMRole
+        - Arn
+
+
+  
+  LambdaDownloadURL:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      FunctionName: Get-Method
+      Code:
+        ZipFile: !Sub |
+          import boto3
+          import json
+          
+          def handler(event, context):
+              bucket_name = "arahaltamazirt"
+              catname = event["queryStringParameters"]["key"]
+              s3_client = boto3.client('s3')
+              url = s3_client.generate_presigned_url('get_object', Params={'Bucket': bucket_name, 'Key': catname}, ExpiresIn=86400)
+              return {'body': json.dumps({'Pre-signed url': url})}
+      Description: Mohammed
+      Handler: index.handler
+      Runtime: python3.8
+      MemorySize: 128
+      Timeout: 120
+      Role: !GetAtt 
+        - lambdaIAMRole
+        - Arn
+
+
+
+  lambdaApiGatewayInvoke:
+    Type: 'AWS::Lambda::Permission'
+    DependsOn:
+      - LambdaDownloadURL
+      - LambdaUploadURL
+      - LambdaListURL
+      - apiGateway
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: Get-Method 
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub >-
+        arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${apiGateway}/${apiGatewayStageName}/${apiGatewayHTTPMethod}/
+
+
+  lambdaIAMRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+                - apigateway.amazonaws.com
+                - s3.amazonaws.com
+      Policies:
+        - PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Action:
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Effect: Allow
+                Resource:
+                  - !Sub >-
+                    arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${lambdaFunctionName}:*
+          PolicyName: lambda
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/AmazonS3FullAccess'
+        - 'arn:aws:iam::aws:policy/AmazonAPIGatewayInvokeFullAccess'
+        - 'arn:aws:iam::aws:policy/AWSLambda_FullAccess'
+
+
+
+  MyS3Bucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      BucketName: arahaltamazirt 
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls : true
+        BlockPublicPolicy : true
+        IgnorePublicAcls : true
+        RestrictPublicBuckets : true
+  
+  S3BucketIAMRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+                - apigateway.amazonaws.com
+                - s3.amazonaws.com
+      Policies:
+        - PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Action:
+                  - 's3:GetObject'
+                  - 's3:PutObject'
+                  - 's3:ListBucket'
+                  - 's3:*'
+                Effect: Allow
+                Resource:
+                  - "arn:aws:s3:::arahaltamazirt/*"
+
+          PolicyName: S3Policy
+
+Outputs:
+  apiGatewayInvokeURL:
+    Value: !Sub https://${apiGateway}.execute-api.${AWS::Region}.amazonaws.com/${apiGatewayStageName}
